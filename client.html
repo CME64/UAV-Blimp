@@ -1,0 +1,361 @@
+<!-- note: the controls development is incomplete (not all of them are functioning) -->
+<html>
+	</head>
+		<link type="text/css" href="css/dot-luv/jquery-ui-1.10.3.custom.min.css" rel="Stylesheet" />
+		<style type="text/css">
+		#map-canvas{
+		  height: 500px;
+		  width: 500px;
+		  border: 3px solid black;
+		}
+		</style>
+		<script type="text/javascript" src="js/socket.io.js"></script>
+		<script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
+		<script type="text/javascript" src="js/jquery-ui-1.10.3.custom.min.js"></script>
+		<script type="text/javascript" src="js/jquery.flot.min.js"></script>
+		<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false" type="text/javascript"></script>
+		<script>
+		$(document).ready(function(){
+			var markersArray = [];
+			var lineCoordinates = [
+			  new google.maps.LatLng(22.291, 153.027),
+			  new google.maps.LatLng(18.291, 153.027)
+			];
+			var map;
+			var lineSymbol = {
+			  path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW
+			};
+			var arrowIcon = {
+			  path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,//'M 125,5 155,90 245,90 175,145 200,230 125,180 50,230 75,145 5,90 95,90 z',
+			  //google.maps.SymbolPath.CIRCLE
+			  fillColor: "lightgreen",
+			  fillOpacity: 0.8,
+			  scale: 4,
+			  strokeColor: "green",
+			  strokeWeight: 2
+			};
+
+			var line = new google.maps.Polyline({
+			  path: lineCoordinates,
+			  icons: [{
+			    icon: lineSymbol,
+			    offset: '100%'
+			  }],
+			  map: map
+			});
+			// if HTML DOM Element that contains the map is found...
+			if (document.getElementById('map-canvas')){
+			 
+			    // Coordinates to center the map
+			    var myLatlng = new google.maps.LatLng(4.28068,101.942139);
+			 
+			    // Other options for the map, pretty much selfexplanatory
+			    var mapOptions = {
+			        zoom: 7,
+			        center: myLatlng,
+			        mapTypeId: google.maps.MapTypeId.ROADMAP
+			    };
+			 
+			    // Attach a map to the DOM Element, with the defined settings
+			    map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+			    //addMarker(myLatlng);
+			}
+
+			function addMarker(location) {
+			  marker = new google.maps.Marker({
+			    position: location,
+			    icon: arrowIcon,
+			    map: map,
+			    animation: google.maps.Animation.DROP,
+			    title: "blimb"
+			  });
+			  markersArray.push(marker);
+			  marker.setAnimation(google.maps.Animation.BOUNCE);
+			}
+
+			// Deletes all markers in the array by removing references to them (except first)
+			function deleteOverlays() {
+			  if (markersArray) {
+			    for (var i=0;i< markersArray.length;i++) { // i in markersArray
+			      markersArray[i].setMap(null);
+			    }
+			    markersArray.length = 0;
+			  }
+			}
+
+
+		// });
+
+		// $(document).ready(function(){
+			var socket = io.connect('http://localhost:8000');
+			var servo = function(){
+				socket.emit('message','A'+$('#servoControl').slider('value'));
+			}
+			var fan = function(el){
+				var let;
+				var elem=$('#eastControl');
+
+				//if checked double =>d
+				if (el == 'e'){
+					let = 'E';
+					elem = $('#eastControl');
+				}else if (el == 'w'){
+					let = 'W';
+					elem = $('#westControl');
+				}
+				//socket.emit('message',let+elem.slider('value'));
+			}
+
+			var lat= "";
+			var lon= "";
+			var alt= 0.0;
+			var Tempreture = 0 ;
+			var Htemp = 0;
+			var eastFan = 0 ;
+			var westFan = 0;
+			var Humidity = 0 ;
+			var direction = 0;
+			var ultraDist = 0;
+			// Initialize Flot data points
+			var totalPoints = 300;
+			var res = {val:[]};
+			var eastVals = {val:[]};
+			var westVals = {val:[]};
+			function getInitData(vv) {
+				// zip the generated y values with the x values
+				for (var i = 0; i < totalPoints; ++i){
+					vv.val.push([i, 0]);
+				}
+				return vv.val;
+			}
+
+
+
+			// Options for Flot plot
+			var options = {
+				series: { shadowSize: 0 }, // drawing is faster without shadows
+				yaxis: { min: 0, max: 300 },
+				xaxis: { show: false }
+			};
+
+			var fanOpts = {
+				series: { shadowSize: 0 }, // drawing is faster without shadows
+				yaxis: { min: 0, max: 150 },
+				xaxis: { show: false }
+			};
+
+			var plot = $.plot($("#placeholder"), [ getInitData(res) ], options);
+			var eastGraph = $.plot($("#EastGraph"), [ getInitData(eastVals) ], fanOpts);
+			var westGraph = $.plot($("#WestGraph"), [ getInitData(westVals) ], fanOpts);
+			// Update the JQuery UI Progress Bar
+			$( "#progressbar" ).progressbar({
+				value: 0
+			}).progressbar( "option", "max", 300 ).progressbar( "enable" );
+
+			$( "#temp" ).progressbar({
+				value: 0
+			}).progressbar( "option", "max", 100 ).progressbar( "enable" );
+
+			$( "#Htemp" ).progressbar({
+				value: 0
+			}).progressbar( "option", "max", 100 ).progressbar( "enable" );
+
+			$( "#hum" ).progressbar({
+				value: 0
+			}).progressbar( "option", "max", 100 ).progressbar( "enable" );
+
+			$( "#udist" ).progressbar({
+				value: 0
+			}).progressbar( "option", "max", 400 ).progressbar( "enable" );
+			$( "#palt" ).progressbar({
+				value: 0
+			}).progressbar( "option", "max", 300 ).progressbar( "enable" );
+
+			$('#eastControl').slider({
+				value:0,
+				min:0,
+				max:150,
+				step:5,
+				change:fan('e'),
+				orientation: 'vertical'
+			});
+			$('#westControl').slider({
+				value:0,
+				min:0,
+				max:150,
+				step:5,
+				change:fan('w'),
+				orientation: 'vertical'
+			});
+
+			$('#servoControl').slider({
+				value:90,
+				min:0,
+				max:180,
+				step:10,
+				change:servo,
+				orientation: 'horizontal'
+			});
+			//$( "#progressbar" ).find( ".ui-progressbar-value" ).css({"background": '#55ddaa'});
+			//var socket = io.connect('http://192.168.1.115:8000');
+			var currlatlang;
+			
+			socket.on('connect', function () {
+				socket.on('message', function (msg) {
+					// Convert value to integer
+					//var val = (parseInt(msg));
+					if(msg[0]=='l'){
+						lat = msg.substring(1,msg.length-2);
+						lat = parseFloat(lat.substring(0,2)) + (parseFloat(lat.substring(2))/60.0000);
+						//if (msg[msg.length-1] == 'S') lat *= -1;
+						if (lon != "" && lat != "") {
+							currlatlang = new google.maps.LatLng(parseFloat(lat),parseFloat(lon));
+							//if(currlatlang != markersArray[markersArray.length-1].getPosition()){
+								//deleteOverlays();
+								//addMarker(currlatlang);
+								if(markersArray.length == 0) addMarker(currlatlang);
+								else markersArray[markersArray.length-1].setPosition(currlatlang);
+								map.panTo(currlatlang);
+								map.setZoom(18);
+							//}
+						}
+						$('#lat').html(lat);
+					}else if(msg[0]=='o'){
+						lon = msg.substring(1,msg.length-2);
+						lon = parseFloat(lon.substring(0,3)) + (parseFloat(lon.substring(3))/60.0000);
+						//if (msg[msg.length-1] == 'W') lon *= -1;
+						if (lon != "" && lat != "") {
+							currlatlang = new google.maps.LatLng(parseFloat(lat),parseFloat(lon));
+							//if(currlatlang != markersArray[markersArray.length-1].getPosition()){
+								//deleteOverlays();
+								//addMarker(currlatlang);
+								if(markersArray.length == 0) addMarker(currlatlang);
+								else markersArray[markersArray.length-1].setPosition(currlatlang);
+								map.panTo(currlatlang);
+								map.setZoom(18);
+							//}
+						}
+						$('#lon').html(lon);
+					}else if(msg[0]=='a'){
+						alt = parseFloat(msg.substring(1));
+						$('#alt,#alt2').html(alt);
+						res.val.push([totalPoints, alt]); 
+						res.val.shift();  
+						for (i=0;i<totalPoints;i++) { res.val[i][0] = i; }
+						plot.setData([ res.val ]);
+						plot.draw();
+						$( "#progressbar" ).progressbar( "option", "value", alt );
+					}else if(msg[0]=='T'){
+						
+						Tempreture = parseInt(msg.substring(1));
+						$('#tem').html(Tempreture);
+						$( "#temp" ).progressbar( "option", "value", Tempreture );
+					}else if(msg[0]=='H'){
+						Humidity = parseInt(msg.substring(1));
+						$('#hu').html(Humidity);
+						$( "#hum" ).progressbar( "option", "value", Humidity );
+					}else if(msg[0]=='E'){
+						eastFan = parseInt(msg.substring(1));
+						$('#eastFan').html(eastFan);
+						eastVals.val.push([totalPoints, eastFan]); 
+						eastVals.val.shift();
+						for (i=0;i<totalPoints;i++) { eastVals.val[i][0] = i; }
+						eastGraph.setData([ eastVals.val ]);
+						eastGraph.draw();
+					}else if(msg[0]=='W'){
+						westFan = parseInt(msg.substring(1));
+						$('#westFan').html(westFan);
+						westVals.val.push([totalPoints, westFan]); 
+						westVals.val.shift();
+						for (i=0;i<totalPoints;i++) { westVals.val[i][0] = i; }
+						westGraph.setData([ westVals.val ]);
+						westGraph.draw();
+					}else if(msg[0] == 'd'){
+						direction = parseInt(msg.substring(1));
+						$('#direction').html(direction+' deg');
+					}else if(msg[0] == 'M'){
+						HTemp = parseInt(msg.substring(1));
+						$('#Htem').html(HTemp);
+						$( "#Htemp" ).progressbar( "option", "value", HTemp ); 
+					}else if(msg[0] == 'F'){
+						switch(msg[1]){
+							case 'S':
+								forcast = 'Sunny';
+								break;
+							case 'C':
+								forcast = 'Cloudy';
+								break;
+							case 'R':
+								forcast = 'Rainy';
+						}
+						$('#weather').html('weather: '+forcast);
+					}else if(msg[0] == 'C'){
+						ultraDist = parseInt(msg.substring(1));
+						$('#ud').html(ultraDist);
+						$( "#udist" ).progressbar( "option", "value", ultraDist );
+					}else if(msg[0] == 'U'){
+						Paltitude = parseInt(msg.substring(1));
+						$('#pa').html(Paltitude);
+						$( "#palt" ).progressbar( "option", "value", Paltitude );
+					}
+					// Put sensor value to the 'sensor_value' span
+					//$('#sensor_value').html(msg);
+					// Push new value to Flot Plot
+					
+					
+					// Update JQuery UI progress bar.
+					// $( "#progressbar" ).progressbar({
+					// 	value: val
+					// });
+					
+					
+					
+				});
+
+			});
+		});
+		</script>
+	</head>
+	<body>
+		<div role="main">
+			
+			<div style="float:left">
+				GPS altitude: <span id="alt"></span> M<br/>
+				<div id="progressbar" style="width:600px;height:50px;"></div><br/>
+				Pressure altitude: <span id="pa"></span> M<br/>
+				<div id="palt" style="width:600px;height:50px;"></div><br/>
+				Altitude Graph:<br/>
+				<div id="placeholder" style="width:600px;height:300px;"></div><br/>
+				
+				Tempreture: <span id="tem"></span> C<br/>
+				<div id="temp" style="width:600px;height:50px;"></div><br/>
+				H Tempreture: <span id="Htem"></span> C<br/>
+				<div id="Htemp" style="width:600px;height:50px;"></div><br/>
+				Humidity: <span id="hu"></span> %<br/>
+				<div id="hum" style="width:600px;height:50px;"></div><br/>
+				East Fan Speed : <span id="east"></span>
+				<div id="EastGraph" style="width:600px;height:300px;"></div>
+				West Fan Speed : <span id="west"></span>
+				<div id="WestGraph" style="width:600px;height:300px;"></div>
+				<div id="weather"></div>
+				<div id="direction"></div>
+				Distance from ground: <span id="ud"></span> CM<br/>
+				<div id="udist" style="width:600px;height:50px;"></div><br/>
+
+
+			</div>
+			<div style="float:right">
+				latitude Value : <span id="lat"></span><br/>
+				longitude Value: <span id="lon"></span><br/>
+				Altitude Value : <span id="alt2"></span><br/>
+				<div id="map-canvas"></div>
+				<div id="servoControl" style="margin:30px 0px;"></div>
+				<div id="eastControl" style="float:left;margin-left:30px;height:30%;"></div>
+				<div id="westControl" style="float:left;margin-left:30px;height:30%;"></div>
+				
+				
+			</div>
+			
+		</div>
+	</body>
+</html>
